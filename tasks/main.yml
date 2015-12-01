@@ -1,0 +1,48 @@
+---
+# tasks file for kibana
+
+- name: add kibana pseudo user
+  sudo_user: root
+  user: name='{{kibana_user}}' uid=5601 group=elasticsearch home={{kibana_home}} createhome=no shell=/bin/false
+
+- name: download Kibana
+  get_url: url=https://download.elastic.co/kibana/kibana/kibana-{{kibana_version}}-linux-x64.tar.gz dest=/tmp validate_certs=no
+  environment: proxy_env
+
+- name: unpack Kibana
+  sudo_user: root
+  unarchive: copy=no src=/tmp/kibana-{{kibana_version}}-linux-x64.tar.gz dest=/usr/share
+
+- name: fix ownership
+  sudo_user: root
+  file: owner=kibana group=elasticsearch path={{kibana_home}} recurse=yes
+
+- name: set elasticsearch url
+  sudo_user: '{{kibana_user}}'
+  lineinfile:
+    dest: "{{kibana_home}}/config/kibana.yml"
+    regexp: "^elasticsearch.url"
+    line: 'elasticsearch.url: "http://{{hostvars[groups.elasticsearch[0]].ansible_fqdn}}:9200"'
+
+- name: install kibana init script
+  sudo_user: root
+  template: src=kibana.init.j2 dest=/etc/init.d/kibana owner=root group=root mode=0755
+
+- name: install /etc/default/kibana
+  sudo_user: root
+  template: src=kibana.env.j2 dest=/etc/default/kibana owner=root group=root mode=0644
+
+- name: enable kibana
+  sudo_user: root
+  service: name=kibana enabled=yes
+
+- name: start kibana
+  sudo_user: root
+  service: name=kibana state=started
+
+# For ES 2.0
+#- name: install marvel
+#  sudo_user: '{{kibana_user}}'
+#  command: bin/kibana plugin --install -Dhttps.proxyPort={{proxy_port}} -Dhttps.proxyHost={{proxy_host}} elasticsearch/marvel/latest
+#  args:
+#    chdir: {{kibana_home}}
